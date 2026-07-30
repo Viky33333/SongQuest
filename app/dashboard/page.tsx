@@ -1,12 +1,12 @@
 "use client";
 
+import { useRouter } from "next/navigation";
+import { createClient } from "@/lib/supabase/client";
 import React, { useState, useRef, useEffect, useMemo, useCallback } from "react";
 
 /* =========================================================================
-   SongQuest — app/page.tsx (Next.js App Router, client component)
+   SongQuest — app/dashboard/page.tsx (Next.js App Router, client component)
    Tabs: Search Songs · Learning Path · Backing Tracks
-   Drop this in app/page.tsx. Add the Google Fonts <link> to app/layout.tsx
-   (snippet provided separately) instead of inlining it here.
    ========================================================================= */
 
 /* ---------------------------------- Design tokens ---------------------------------- */
@@ -466,7 +466,7 @@ function SearchTab({
                 ))}
               </ul>
               <div style={{ marginTop: 12, display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
-                <a
+                
                   href={buildSongVideoUrl(s)}
                   target="_blank"
                   rel="noopener noreferrer"
@@ -481,7 +481,7 @@ function SearchTab({
                 >
                   🎬 Official video
                 </a>
-                <a
+                
                   href={buildSongTabUrl(s)}
                   target="_blank"
                   rel="noopener noreferrer"
@@ -612,7 +612,7 @@ function LearningPathTab({
 
       <div style={{ background: COLORS.wood, borderRadius: 16, padding: "26px 20px 30px", position: "relative" }}>
         <div style={{ fontFamily: "'Fraunces', serif", fontSize: 22, fontWeight: 700, color: COLORS.cream, marginBottom: 4 }}>
-          Path to “{target.title}”
+          Path to "{target.title}"
         </div>
         <div style={{ fontFamily: "Inter, sans-serif", fontSize: 13, color: COLORS.creamDim, marginBottom: 26 }}>
           Three stepping stone songs to build the exact skills this target song needs, in order.
@@ -641,7 +641,7 @@ function LearningPathTab({
                 <div style={{ fontFamily: "Inter, sans-serif", fontWeight: 600, fontSize: 14, color: COLORS.cream }}>{p.title}</div>
                 <div style={{ fontFamily: "Inter, sans-serif", fontSize: 12, color: COLORS.creamDim, marginBottom: 8 }}>{p.artist}</div>
                 <div style={{ fontFamily: "Inter, sans-serif", fontSize: 11, color: COLORS.amberSoft, marginBottom: 8 }}>{p.skills[0]}</div>
-                <a
+                
                   href={buildSongVideoUrl(p)}
                   target="_blank"
                   rel="noopener noreferrer"
@@ -671,6 +671,7 @@ function LearningPathTab({
                 fontSize: 30, cursor: prereqsDone ? "pointer" : "default",
                 filter: prereqsDone ? "none" : "grayscale(0.4) opacity(0.7)",
               }}
+              onClick={() => prereqsDone && onOpenPractice(target)}
             >
               {prereqsDone ? "🎸" : "🔒"}
             </div>
@@ -678,7 +679,7 @@ function LearningPathTab({
             <div style={{ fontFamily: "Inter, sans-serif", fontSize: 12, color: COLORS.creamDim, marginBottom: 10 }}>
               {prereqsDone ? "Unlocked — go for it!" : "Unlocks after the 3 songs above"}
             </div>
-            <a
+            
               href={buildSongVideoUrl(target)}
               target="_blank"
               rel="noopener noreferrer"
@@ -1136,7 +1137,7 @@ function PracticeModal({
         />
 
         <div style={{ marginBottom: 14 }}>
-          <a
+          
             href={buildSongTabUrl(song)}
             target="_blank"
             rel="noopener noreferrer"
@@ -1251,6 +1252,13 @@ export default function Page() {
   const [practiceSong, setPracticeSong] = useState<Song | null>(null);
   const [celebrate, setCelebrate] = useState<{ song: Song; score: number } | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
+  const router = useRouter();
+
+  const handleSignOut = useCallback(async () => {
+    const supabase = createClient();
+    await supabase.auth.signOut();
+    router.push("/login");
+  }, [router]);
 
   const playClickSound = useCallback(() => {
     if (typeof window === "undefined") return;
@@ -1325,8 +1333,20 @@ export default function Page() {
           <div style={{ fontFamily: "'Fraunces', serif", fontSize: 32, fontWeight: 700, color: COLORS.cream }}>
             Song<span style={{ color: COLORS.amber }}>Quest</span>
           </div>
-          <div style={{ fontFamily: "Inter, sans-serif", fontSize: 13, color: COLORS.creamDim, padding: "8px 12px", borderRadius: 999, background: `${COLORS.wood}cc`, border: `1px solid ${COLORS.amber}33` }}>
-            Learn hard songs one fret at a time
+          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+            <div style={{ fontFamily: "Inter, sans-serif", fontSize: 13, color: COLORS.creamDim, padding: "8px 12px", borderRadius: 999, background: `${COLORS.wood}cc`, border: `1px solid ${COLORS.amber}33` }}>
+              Learn hard songs one fret at a time
+            </div>
+            <button
+              onClick={handleSignOut}
+              style={{
+                padding: "8px 16px", borderRadius: 999, border: `1px solid ${COLORS.woodLight}`,
+                background: "transparent", color: COLORS.creamDim, fontFamily: "Inter, sans-serif",
+                fontSize: 13, cursor: "pointer",
+              }}
+            >
+              Sign out
+            </button>
           </div>
         </div>
 
