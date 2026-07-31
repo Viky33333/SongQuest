@@ -7,6 +7,7 @@ import React, { useState, useRef, useEffect, useMemo, useCallback } from "react"
 /* =========================================================================
    SongQuest — app/dashboard/page.tsx (Next.js App Router, client component)
    Tabs: Search Songs · Learning Path · Backing Tracks
+   Progress (completed songs + XP) persists to Supabase per user.
    ========================================================================= */
 
 /* ---------------------------------- Design tokens ---------------------------------- */
@@ -358,37 +359,8 @@ function FretDivider() {
   );
 }
 
-function getPreviewProgression(song: Song): string[] {
-  const normalizedKey = (song.key || "C").replace(/m$/, "").replace(/maj$/, "");
-  const key = normalizedKey === "F#" ? "F#" : normalizedKey === "C#" ? "C#" : normalizedKey;
-
-  const map: Record<string, string[]> = {
-    C: ["C", "G", "Am", "F"],
-    G: ["G", "D", "Em", "C"],
-    D: ["D", "A", "Bm", "G"],
-    A: ["A", "E", "F#m", "D"],
-    E: ["E", "B", "C#m", "A"],
-    F: ["F", "C", "Dm", "Bb"],
-    B: ["B", "F#", "G#m", "E"],
-    "C#": ["C#", "G#", "A#m", "D#"],
-    "F#": ["F#", "C#", "D#m", "A#"],
-    Am: ["Am", "F", "G", "Em"],
-    Em: ["Em", "C", "G", "D"],
-    Dm: ["Dm", "Am", "C", "F"],
-    Bm: ["Bm", "F#", "G", "D"],
-  };
-
-  return map[key] || ["C", "G", "Am", "F"];
-}
-
 /* ---------------------------------- Tab: Search Songs ---------------------------------- */
-function SearchTab({
-  progress,
-  onPreviewSong,
-}: {
-  progress: Progress;
-  onPreviewSong: (song: Song) => void;
-}) {
+function SearchTab({ progress }: { progress: Progress }) {
   const [query, setQuery] = useState("");
   const [diffFilter, setDiffFilter] = useState<"All" | Difficulty>("All");
 
@@ -466,7 +438,7 @@ function SearchTab({
                 ))}
               </ul>
               <div style={{ marginTop: 12, display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
-                
+                <a
                   href={buildSongVideoUrl(s)}
                   target="_blank"
                   rel="noopener noreferrer"
@@ -481,7 +453,7 @@ function SearchTab({
                 >
                   🎬 Official video
                 </a>
-                
+                <a
                   href={buildSongTabUrl(s)}
                   target="_blank"
                   rel="noopener noreferrer"
@@ -534,11 +506,9 @@ function pickPrerequisites(hardSong: Song): Song[] {
 function LearningPathTab({
   progress,
   onOpenPractice,
-  onPreviewSong,
 }: {
   progress: Progress;
   onOpenPractice: (song: Song) => void;
-  onPreviewSong: (song: Song) => void;
 }) {
   const hardSongs = SONGS.filter((s) => s.difficulty === "Hard").sort((a, b) => a.title.localeCompare(b.title));
   const [targetId, setTargetId] = useState(hardSongs[0].id);
@@ -641,7 +611,7 @@ function LearningPathTab({
                 <div style={{ fontFamily: "Inter, sans-serif", fontWeight: 600, fontSize: 14, color: COLORS.cream }}>{p.title}</div>
                 <div style={{ fontFamily: "Inter, sans-serif", fontSize: 12, color: COLORS.creamDim, marginBottom: 8 }}>{p.artist}</div>
                 <div style={{ fontFamily: "Inter, sans-serif", fontSize: 11, color: COLORS.amberSoft, marginBottom: 8 }}>{p.skills[0]}</div>
-                
+                <a
                   href={buildSongVideoUrl(p)}
                   target="_blank"
                   rel="noopener noreferrer"
@@ -679,7 +649,7 @@ function LearningPathTab({
             <div style={{ fontFamily: "Inter, sans-serif", fontSize: 12, color: COLORS.creamDim, marginBottom: 10 }}>
               {prereqsDone ? "Unlocked — go for it!" : "Unlocks after the 3 songs above"}
             </div>
-            
+            <a
               href={buildSongVideoUrl(target)}
               target="_blank"
               rel="noopener noreferrer"
@@ -722,9 +692,6 @@ function BackingTracksTab() {
   const ctxRef = useRef<AudioContext | null>(null);
   const stopFlagRef = useRef(false);
   const timeoutRef = useRef<number | null>(null);
-
-  const styleWave: OscillatorType =
-    style === "Pop" ? "triangle" : style === "Rock" ? "sawtooth" : style === "Jazz" ? "sine" : "square";
 
   const parsedChords = useMemo(() => {
     return chordsText.split(",").map((c) => parseChord(c)).filter((c): c is Chord => c !== null);
@@ -821,7 +788,7 @@ function BackingTracksTab() {
     });
 
     return Math.max(0.05, t - startTime);
-  }, [parsedChords, bpm, beatsPerChord, style, styleWave]);
+  }, [parsedChords, bpm, beatsPerChord, style]);
 
   const play = useCallback(() => {
     if (parsedChords.length === 0) return;
@@ -1137,7 +1104,7 @@ function PracticeModal({
         />
 
         <div style={{ marginBottom: 14 }}>
-          
+          <a
             href={buildSongTabUrl(song)}
             target="_blank"
             rel="noopener noreferrer"
@@ -1247,12 +1214,62 @@ function GuitarAccent() {
 }
 
 export default function Page() {
+  const router = useRouter();
+
   const [tab, setTab] = useState<TabId>("search");
   const [progress, setProgress] = useState<Progress>({ completed: [], xp: 0 });
+  const [progressLoaded, setProgressLoaded] = useState(false);
   const [practiceSong, setPracticeSong] = useState<Song | null>(null);
   const [celebrate, setCelebrate] = useState<{ song: Song; score: number } | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
-  const router = useRouter();
+  const userIdRef = useRef<string | null>(null);
+
+  /* --- Load this user's saved progress from Supabase on mount --- */
+  useEffect(() => {
+    const loadProgress = async () => {
+      const supabase = createClient();
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+
+      if (!user) {
+        router.push("/login");
+        return;
+      }
+
+      userIdRef.current = user.id;
+
+      const { data, error } = await supabase
+        .from("user_progress")
+        .select("completed, xp")
+        .eq("user_id", user.id)
+        .maybeSingle();
+
+      if (!error && data) {
+        setProgress({ completed: data.completed ?? [], xp: data.xp ?? 0 });
+      }
+      setProgressLoaded(true);
+    };
+
+    loadProgress();
+  }, [router]);
+
+  /* --- Persist progress to Supabase whenever it changes (after initial load) --- */
+  useEffect(() => {
+    if (!progressLoaded || !userIdRef.current) return;
+
+    const saveProgress = async () => {
+      const supabase = createClient();
+      await supabase.from("user_progress").upsert({
+        user_id: userIdRef.current,
+        completed: progress.completed,
+        xp: progress.xp,
+        updated_at: new Date().toISOString(),
+      });
+    };
+
+    saveProgress();
+  }, [progress, progressLoaded]);
 
   const handleSignOut = useCallback(async () => {
     const supabase = createClient();
@@ -1300,10 +1317,6 @@ export default function Page() {
     }
   }, [playClickSound]);
 
-  const handlePreviewSong = useCallback((song: Song) => {
-    window.open(buildSongVideoUrl(song), "_blank", "noopener,noreferrer");
-  }, []);
-
   const handlePass = (song: Song, score: number) => {
     setProgress((p) => {
       if (p.completed.includes(song.id)) return p;
@@ -1321,6 +1334,20 @@ export default function Page() {
     { id: "path", label: "Learning Path" },
     { id: "backing", label: "Backing Tracks" },
   ];
+
+  if (!progressLoaded) {
+    return (
+      <div
+        style={{
+          minHeight: "100vh", background: COLORS.bg, color: COLORS.creamDim,
+          display: "flex", alignItems: "center", justifyContent: "center",
+          fontFamily: "Inter, sans-serif", fontSize: 14,
+        }}
+      >
+        Loading your progress…
+      </div>
+    );
+  }
 
   return (
     <div
@@ -1387,8 +1414,8 @@ export default function Page() {
           </div>
 
           <div style={{ flex: 1, marginBottom: 30 }}>
-            {tab === "search" && <SearchTab progress={progress} onPreviewSong={handlePreviewSong} />}
-            {tab === "path" && <LearningPathTab progress={progress} onOpenPractice={setPracticeSong} onPreviewSong={handlePreviewSong} />}
+            {tab === "search" && <SearchTab progress={progress} />}
+            {tab === "path" && <LearningPathTab progress={progress} onOpenPractice={setPracticeSong} />}
             {tab === "backing" && <BackingTracksTab />}
           </div>
         </div>

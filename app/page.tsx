@@ -4,8 +4,8 @@ import Link from "next/link";
 import { useState } from "react";
 export default function Home() {
   const [modal, setModal] = useState<"about" | "contact" | null>(null);
-  
-  // ...rest of your existing component logic (handlePass, TABS, etc.)
+
+
   return (
     <main className="relative min-h-screen overflow-hidden bg-[#1a0f08] text-white">
       {/* Ambient background glow */}
@@ -23,7 +23,23 @@ export default function Home() {
               Song<span className="text-amber-400">Quest</span>
             </span>
           </div>
-
+  <div className="pointer-events-none absolute inset-0 overflow-hidden">
+    <svg
+      viewBox="0 0 500 1000"
+      className="absolute right-[-120px] top-1/2 h-[900px] -translate-y-1/2 rotate-[-18deg] opacity-10 text-amber-300"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="8"
+    >
+      <circle cx="220" cy="760" r="120" />
+      <circle cx="220" cy="610" r="90" />
+      <path d="M220 520 L250 120" />
+      <rect x="240" y="40" width="20" height="100" rx="8" />
+      <line x1="245" y1="40" x2="245" y2="900" />
+      <line x1="250" y1="40" x2="250" y2="900" />
+      <line x1="255" y1="40" x2="255" y2="900" />
+    </svg>
+  </div>
           <nav className="flex items-center gap-1 rounded-full border border-white/10 bg-white/[0.04] p-1.5 shadow-[0_8px_30px_rgba(0,0,0,0.35)] backdrop-blur-md">
             <button
               onClick={() => setModal("about")}
